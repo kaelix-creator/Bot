@@ -1,3 +1,42 @@
+import discord
+from discord.ext import commands
+from discord.ui import View, Select, Button
+import asyncio
+import os
+
+from google import genai
+
+# ================= CONFIGURAÇÃO =================
+
+intents = discord.Intents.default()
+intents.message_content = True
+intents.guilds = True
+intents.members = True
+
+bot = commands.Bot(command_prefix="!", intents=intents)
+
+CANAL_PAINEL_ID = 1442562689284178062
+CANAL_LOGS_ID = 1452729573828464742
+CARGO_STAFF_ID = 1442562553753632859
+CATEGORIA_TICKETS = None
+
+# ================= GOOGLE GEMINI =================
+
+client = genai.Client(api_key=os.getenv("GEMINI_API_KEY"))
+
+async def perguntar_ia(pergunta: str) -> str:
+    try:
+        response = await asyncio.to_thread(
+            client.models.generate_content,
+            model="gemini-2.5-flash",
+            contents=pergunta
+        )
+        return response.text or "🤖 Não consegui gerar resposta."
+    except Exception:
+        return "⚠️ A IA do Google está indisponível no momento."
+
+# ================= SELECT DO TICKET =================
+
 class TicketSelect(Select):
     def __init__(self):
         options = [
@@ -26,7 +65,7 @@ class TicketSelect(Select):
                 value="duvidas_ajuda"
             )
         ]
-        
+
         super().__init__(
             placeholder="📋 Selecione o tipo de suporte...",
             min_values=1,
@@ -34,12 +73,12 @@ class TicketSelect(Select):
             options=options,
             custom_id="ticket_select"
         )
-    
+
     async def callback(self, interaction: discord.Interaction):
         guild = interaction.guild
         user = interaction.user
         tipo_ticket = self.values[0]
-        
+
         # Verificar se já tem ticket aberto
         existing_ticket = discord.utils.get(guild.text_channels, name=f"ticket-{user.name.lower()}")
         if existing_ticket:
@@ -49,14 +88,14 @@ class TicketSelect(Select):
             )
             await interaction.response.send_message(embed=embed_erro, ephemeral=True)
             return
-        
+
         # Mensagem de carregamento
         embed_loading = discord.Embed(
             description="⏳ Criando seu ticket...",
             color=0xFFFF00
         )
         await interaction.response.send_message(embed=embed_loading, ephemeral=True)
-        
+
         # Definir informações baseadas no tipo
         tipos_info = {
             "suporte_geral": {
@@ -84,18 +123,18 @@ class TicketSelect(Select):
                 "instrucoes": "**Estamos aqui para ajudar!**\n> • Faça sua pergunta de forma clara\n> • Mencione sobre qual sistema/evento é a dúvida\n> • Se for sobre regras, especifique qual\n\n💬 Responderemos o mais rápido possível!"
             }
         }
-        
+
         info = tipos_info[tipo_ticket]
-        
+
         # Criar canal do ticket
         staff_role = guild.get_role(CARGO_STAFF_ID)
-        
+
         overwrites = {
             guild.default_role: discord.PermissionOverwrite(read_messages=False),
             user: discord.PermissionOverwrite(read_messages=True, send_messages=True, attach_files=True, embed_links=True),
             guild.me: discord.PermissionOverwrite(read_messages=True, send_messages=True, manage_channels=True)
         }
-        
+
         if staff_role:
             overwrites[staff_role] = discord.PermissionOverwrite(
                 read_messages=True, 
@@ -104,16 +143,16 @@ class TicketSelect(Select):
                 embed_links=True,
                 manage_messages=True
             )
-        
+
         categoria = guild.get_channel(CATEGORIA_TICKETS) if CATEGORIA_TICKETS else None
-        
+
         ticket_channel = await guild.create_text_channel(
             name=f"{info['emoji']}-{user.name}",
             overwrites=overwrites,
             category=categoria,
             topic=f"{info['nome']} • {user.name} ({user.id})"
         )
-        
+
         # Embed do ticket
         embed_ticket = discord.Embed(
             title=f"{info['emoji']} {info['nome']}",
@@ -141,24 +180,24 @@ class TicketSelect(Select):
             icon_url=user.display_avatar.url
         )
         embed_ticket.timestamp = discord.utils.utcnow()
-        
+
         # Botões de controle
         control_view = View(timeout=None)
-        
+
         claim_button = Button(
             label="Assumir Ticket",
             style=discord.ButtonStyle.success,
             custom_id="claim_ticket",
             emoji="✋"
         )
-        
+
         close_button = Button(
             label="Fechar Ticket",
             style=discord.ButtonStyle.danger,
             custom_id="close_ticket",
             emoji="🔒"
         )
-        
+
         async def claim_callback(inter: discord.Interaction):
             if inter.user.id == user.id:
                 embed_erro_claim = discord.Embed(
@@ -167,7 +206,7 @@ class TicketSelect(Select):
                 )
                 await inter.response.send_message(embed=embed_erro_claim, ephemeral=True)
                 return
-            
+
             embed_claim = discord.Embed(
                 title="✋ Ticket Assumido",
                 description=f"{inter.user.mention} assumiu este ticket e irá atendê-lo em breve!",
@@ -176,7 +215,7 @@ class TicketSelect(Select):
             embed_claim.set_footer(text=f"Assumido por {inter.user.name}", icon_url=inter.user.display_avatar.url)
             embed_claim.timestamp = discord.utils.utcnow()
             await inter.response.send_message(embed=embed_claim)
-            
+
             canal_logs = guild.get_channel(CANAL_LOGS_ID)
             if canal_logs:
                 embed_log_claim = discord.Embed(
@@ -187,7 +226,7 @@ class TicketSelect(Select):
                 embed_log_claim.set_thumbnail(url=inter.user.display_avatar.url)
                 embed_log_claim.timestamp = discord.utils.utcnow()
                 await canal_logs.send(embed=embed_log_claim)
-        
+
         async def close_callback(inter: discord.Interaction):
             embed_close = discord.Embed(
                 title="🔒 Fechando Ticket",
@@ -202,7 +241,7 @@ class TicketSelect(Select):
             )
             embed_close.set_footer(text=f"Fechado por {inter.user.name}", icon_url=inter.user.display_avatar.url)
             await inter.response.send_message(embed=embed_close)
-            
+
             canal_logs = guild.get_channel(CANAL_LOGS_ID)
             if canal_logs:
                 embed_log_close = discord.Embed(
@@ -216,22 +255,22 @@ class TicketSelect(Select):
                 embed_log_close.set_thumbnail(url=inter.user.display_avatar.url)
                 embed_log_close.timestamp = discord.utils.utcnow()
                 await canal_logs.send(embed=embed_log_close)
-            
+
             await asyncio.sleep(5)
             await ticket_channel.delete(reason=f"Ticket fechado por {inter.user.name}")
-        
+
         claim_button.callback = claim_callback
         close_button.callback = close_callback
-        
+
         control_view.add_item(claim_button)
         control_view.add_item(close_button)
-        
+
         mention_content = user.mention
         if staff_role:
             mention_content = f"{user.mention} {staff_role.mention}"
-        
+
         await ticket_channel.send(content=mention_content, embed=embed_ticket, view=control_view)
-        
+
         canal_logs = guild.get_channel(CANAL_LOGS_ID)
         if canal_logs:
             embed_log = discord.Embed(
@@ -242,7 +281,7 @@ class TicketSelect(Select):
             embed_log.set_thumbnail(url=user.display_avatar.url)
             embed_log.timestamp = discord.utils.utcnow()
             await canal_logs.send(embed=embed_log)
-        
+
         embed_sucesso = discord.Embed(
             title="✅ Ticket Criado!",
             description=f"Seu ticket foi criado com sucesso!\n\n**Acesse:** {ticket_channel.mention}",
@@ -262,7 +301,7 @@ async def on_ready():
     print(f"🤖 ID: {bot.user.id}")
     print(f"🆓 IA: Hugging Face (Gratuita e SEM CHAVE!)")
     print("-------------------")
-    
+
     bot.add_view(TicketView())
     await enviar_painel_automatico()
 
@@ -270,19 +309,19 @@ async def on_ready():
 async def on_message(message):
     if message.author == bot.user:
         return
-    
+
     # Verificar se o bot foi mencionado
     if bot.user in message.mentions:
         pergunta = message.content.replace(f'<@{bot.user.id}>', '').strip()
-        
+
         if not pergunta:
             await message.reply("👋 Olá! Me mencione com uma pergunta e eu responderei usando IA!")
             return
-        
+
         # Mostrar que está digitando
         async with message.channel.typing():
             resposta = await perguntar_ia(pergunta)
-            
+
             embed_resposta = discord.Embed(
                 title="🤖 Resposta da IA",
                 description=resposta,
@@ -293,21 +332,21 @@ async def on_message(message):
                 icon_url=message.author.display_avatar.url
             )
             embed_resposta.timestamp = discord.utils.utcnow()
-            
+
             await message.reply(embed=embed_resposta)
-    
+
     await bot.process_commands(message)
 
 async def enviar_painel_automatico():
     """Envia o painel automaticamente quando o bot ligar"""
     await bot.wait_until_ready()
-    
+
     canal = bot.get_channel(CANAL_PAINEL_ID)
-    
-    if não canal:
+
+    if not canal:
         print("❌ Canal não encontrado! Verifique o ID.")
         return
-    
+
     try:
         async for message in canal.history(limit=50):
             if message.author == bot.user:
@@ -315,7 +354,7 @@ async def enviar_painel_automatico():
                 await asyncio.sleep(0.5)
     except:
         pass
-    
+
     embed = discord.Embed(
         title="🎫 Sistema de Suporte Embee",
         description=(
@@ -349,7 +388,7 @@ async def enviar_painel_automatico():
         ),
         color=0xE74C3C
     )
-    
+
     embed.set_image(url="https://i.pinimg.com/736x/4d/75/97/4d75975c8e4db8e5809275c4521ad645.jpg")
     embed.set_thumbnail(url=bot.user.display_avatar.url)
     embed.set_footer(
@@ -361,7 +400,7 @@ async def enviar_painel_automatico():
         icon_url=bot.user.display_avatar.url
     )
     embed.timestamp = discord.utils.utcnow()
-    
+
     await canal.send(embed=embed, view=TicketView())
     print(f"✅ Painel enviado automaticamente em #{canal.name}")
 
@@ -370,7 +409,7 @@ async def enviar_painel_automatico():
 async def setup_categoria(ctx, categoria_id: int = None):
     """Define a categoria onde os tickets serão criados"""
     global CATEGORIA_TICKETS
-    
+
     if categoria_id:
         categoria = ctx.guild.get_channel(categoria_id)
         if categoria and isinstance(categoria, discord.CategoryChannel):
@@ -389,7 +428,7 @@ async def reenviar_painel(ctx):
     await ctx.send("✅ Painel reenviado!")
 
 # Token do bot
-TOKEN = "MTQ1MjcyMzY5MjAzODY1MTkxNA.GAl8Ze.hd4t2LAXBJhWVYD2WDvc756BkEY5a0Oo7W0_-Q"
+TOKEN = "MTQ1MjcyMzY5MjAzODY1MTkxNA.GuhXYk.PY2jI1TDkhACoOsZnoGabEwzd2BPZIW7c-6Ta8"
 
 if __name__ == "__main__":
     bot.run(TOKEN)
