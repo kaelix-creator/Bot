@@ -3,8 +3,7 @@ from discord.ext import commands
 from discord.ui import View, Select, Button
 import asyncio
 import os
-
-from google import genai
+import google.generativeai as genai  # Import corrigido do Gemini
 
 # ================= CONFIGURAÇÃO =================
 
@@ -22,18 +21,13 @@ CATEGORIA_TICKETS = None
 
 # ================= GOOGLE GEMINI =================
 
-client = genai.Client(api_key=os.getenv("GEMINI_API_KEY"))
+# Configura a API corretamente
+GEMINI_KEY = os.getenv("GEMINI_API_KEY")
+if not GEMINI_KEY:
+    raise RuntimeError("GEMINI_API_KEY não configurada")
 
-async def perguntar_ia(pergunta: str) -> str:
-    try:
-        response = await asyncio.to_thread(
-            client.models.generate_content,
-            model="gemini-2.5-flash",
-            contents=pergunta
-        )
-        return response.text or "🤖 Não consegui gerar resposta."
-    except Exception:
-        return "⚠️ A IA do Google está indisponível no momento."
+genai.configure(api_key=GEMINI_KEY)
+model = genai.GenerativeModel("gemini-2.5-flash")  # Modelo atualizado
 
 # ================= SELECT DO TICKET =================
 
