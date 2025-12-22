@@ -428,7 +428,10 @@ async def reenviar_painel(ctx):
     await ctx.send("✅ Painel reenviado!")
 
 # Token do bot
-TOKEN = "MTQ1MjcyMzY5MjAzODY1MTkxNA.GbxnQx.C5t9jIwde2Ot0ZysGIV8lnPQDMYv3IyA5-QP1U"
+TOKEN = os.getenv("DISCORD_TOKEN")
 
-if __name__ == "__main__":
-    bot.run(TOKEN)
+if not TOKEN:
+    raise RuntimeError("DISCORD_TOKEN não configurado")
+
+bot.run(TOKEN)
+
