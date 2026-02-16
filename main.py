@@ -14,15 +14,15 @@ intents.members = True
 
 bot = commands.Bot(command_prefix="!", intents=intents)
 
-CANAL_PAINEL_ID = 1442562689284178062
-CANAL_LOGS_ID = 1452729573828464742
-CARGO_STAFF_ID = 1442562553753632859
+CANAL_PAINEL_ID = 1453739353661509673
+CANAL_LOGS_ID = 1472725771402346506
+CARGO_STAFF_ID = 1453935308302188619
 CATEGORIA_TICKETS = None
 
 # ================= GOOGLE GEMINI =================
 
 # Configura a API corretamente
-GEMINI_KEY = os.getenv("GEMINI_API_KEY")
+GEMINI_KEY = os.getenv("AIzaSyA_uQCBJ2NacCzgnrSMBN11s6S_HndXWrI")
 if not GEMINI_KEY:
     raise RuntimeError("GEMINI_API_KEY não configurada")
 
